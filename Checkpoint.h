@@ -36,7 +36,6 @@ private:
 	int _chkp_counter;
 	int _rank;
 	void chk_print(std::string msg);
-	void populateBytes(FLOAT tmp, byte* buffer, int &counter);
 };
 
 

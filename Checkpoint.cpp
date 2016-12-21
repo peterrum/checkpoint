@@ -1,21 +1,19 @@
 #include "Checkpoint.h"
 
-
-Checkpoint::Checkpoint(Parameters & parameters):
-_parameters(parameters),
-_chkp_counter(0){
+Checkpoint::Checkpoint(Parameters & parameters) :
+		_parameters(parameters), _chkp_counter(0) {
 	MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
 	const int dir_err = system("mkdir -p checkpoint/data");
 	if (-1 == dir_err) {
-			perror("Cannot create checkpoint/data folder!");
-			exit(1);
+		perror("Cannot create checkpoint/data folder!");
+		exit(1);
 	}
 	_localsize = parameters.parallel.localSize;
 
 	std::stringstream tmp_chk_name("");
-	tmp_chk_name<<"checkpoint/data/chkp_"
-				<<parameters.simulation.scenario
-				<<"_"<<_localsize[0]<<"x"<<_localsize[1]<<"x"<<_localsize[2];
+	tmp_chk_name << "checkpoint/data/chkp_" << parameters.simulation.scenario
+			<< "_" << _localsize[0] << "x" << _localsize[1] << "x"
+			<< _localsize[2];
 	_chkp_name = tmp_chk_name.str();
 
 }
@@ -23,83 +21,88 @@ _chkp_counter(0){
 /*
  *
  */
-void Checkpoint::add(Field<FLOAT> & field, std::string name){
-	struct field_data fd = {name, field};
+void Checkpoint::add(Field<FLOAT> & field, std::string name) {
+	struct field_data fd = { name, field };
 	_data_list.push_back(fd);
-	chk_print("Added Field "+name);
+	chk_print("Added Field " + name);
 }
 
-int Checkpoint::write_ascii(){
-	chk_print("Write out checkpoint #"+_chkp_counter);
+int Checkpoint::write_ascii() {
+	chk_print("Write out checkpoint #" + _chkp_counter);
 	//Open file
-	std::ofstream output (_chkp_name.c_str(), std::ios::out | std::ios::binary);
-	if (!output.is_open()){
-		std::cerr<<"Cannot open file "<<_chkp_name.c_str()<<" !"<<std::endl;
+	std::ofstream output(_chkp_name.c_str(), std::ios::out | std::ios::binary);
+	if (!output.is_open()) {
+		std::cerr << "Cannot open file " << _chkp_name.c_str() << " !"
+				<< std::endl;
 		return 1;
 	}
-	std::cout<<"File "<<_chkp_name.c_str()<<" has been opened"<<std::endl;
-
+	std::cout << "File " << _chkp_name.c_str() << " has been opened"
+			<< std::endl;
 
 	//write header information to file
-	output<< "Header"<<std::endl;
-	output<< _parameters.parallel.localSize[0]<<" "<<_parameters.parallel.localSize[1]<<" "<<_parameters.parallel.localSize[2]<<std::endl;
+	output << "Header" << std::endl;
+	output << _parameters.parallel.localSize[0] << " "
+			<< _parameters.parallel.localSize[1] << " "
+			<< _parameters.parallel.localSize[2] << std::endl;
 
 	//loop over each element in the list
 	std::list<field_data>::const_iterator it;
 	for (it = _data_list.begin(); it != _data_list.end(); ++it) {
-	    std::cout << (*it).name<<std::endl;
-	    output<<(*it).name<<std::endl;
+		std::cout << (*it).name << std::endl;
+		output << (*it).name << std::endl;
 
-	    //try cast it to scalarfield
-	    try{
-	    	ScalarField & sf= dynamic_cast<ScalarField &>((*it).field);
+		//try cast it to scalarfield
+		try {
+			ScalarField & sf = dynamic_cast<ScalarField &>((*it).field);
 
-	    	if(_parameters.geometry.dim==2){
-	    		 for(int i=0;i<sf.getNx();i++){
-					for(int j=0;j<sf.getNy();j++){
-							output<<sf.getScalar(i,j)<<" ";
+			if (_parameters.geometry.dim == 2) {
+				for (int i = 0; i < sf.getNx(); i++) {
+					for (int j = 0; j < sf.getNy(); j++) {
+						output << sf.getScalar(i, j) << " ";
 					}
 				}
-	    	}else{
-				for(int i=0;i<sf.getNx();i++){
-					for(int j=0;j<sf.getNy();j++){
-						for(int k=0;k<sf.getNz();k++){
-							output<<sf.getScalar(i,j,k)<<" ";
+			} else {
+				for (int i = 0; i < sf.getNx(); i++) {
+					for (int j = 0; j < sf.getNy(); j++) {
+						for (int k = 0; k < sf.getNz(); k++) {
+							output << sf.getScalar(i, j, k) << " ";
 						}
 					}
 				}
-	    	}
+			}
 
-	    }catch(const std::bad_cast& e) {
-	    	try{
-				VectorField & vf= dynamic_cast<VectorField &>((*it).field);
+		} catch (const std::bad_cast& e) {
+			try {
+				VectorField & vf = dynamic_cast<VectorField &>((*it).field);
 
-				if(_parameters.geometry.dim==2){
-						 for(int i=0;i<vf.getNx();i++){
-							for(int j=0;j<vf.getNy();j++){
-									output<<vf.getVector(i,j)[0]<<" "<<vf.getVector(i,j)[1]<<" ";
-							}
+				if (_parameters.geometry.dim == 2) {
+					for (int i = 0; i < vf.getNx(); i++) {
+						for (int j = 0; j < vf.getNy(); j++) {
+							output << vf.getVector(i, j)[0] << " "
+									<< vf.getVector(i, j)[1] << " ";
 						}
-					}else{
-						for(int i=0;i<vf.getNx();i++){
-							for(int j=0;j<vf.getNy();j++){
-								for(int k=0;k<vf.getNz();k++){
-									output<<vf.getVector(i,j,k)[0]
-								     <<" "<<vf.getVector(i,j,k)[1]
-									 <<" "<<vf.getVector(i,j,k)[1]<<" ";
-								}
+					}
+				} else {
+					for (int i = 0; i < vf.getNx(); i++) {
+						for (int j = 0; j < vf.getNy(); j++) {
+							for (int k = 0; k < vf.getNz(); k++) {
+								output << vf.getVector(i, j, k)[0] << " "
+										<< vf.getVector(i, j, k)[1] << " "
+										<< vf.getVector(i, j, k)[1] << " ";
 							}
 						}
 					}
+				}
 
-			}catch(const std::bad_cast& e) {
-				std::cerr<<"Field "<<(*it).name<<" is not a Scalar or Vector field. Creating checkpoint failed!";
+			} catch (const std::bad_cast& e) {
+				std::cerr << "Field " << (*it).name
+						<< " is not a Scalar or Vector field. Creating checkpoint failed!";
 				output.close();
 				return 1;
 			}
-	    }
+		}
 
-	    output<<std::endl;
+		output << std::endl;
 	}
 
 	output.close();
@@ -108,93 +111,86 @@ int Checkpoint::write_ascii(){
 	return 0;
 }
 
-int Checkpoint::write(){
-	chk_print("Write out checkpoint #"+_chkp_counter);
+int Checkpoint::write() {
+	chk_print("Write out checkpoint #" + _chkp_counter);
 	//Open file
-	std::ofstream output (_chkp_name.c_str(), std::ios::out | std::ios::binary);
-	if (!output.is_open()){
-		std::cerr<<"Cannot open file "<<_chkp_name.c_str()<<" !"<<std::endl;
+	std::ofstream output(_chkp_name.c_str(), std::ios::out | std::ios::binary);
+	if (!output.is_open()) {
+		std::cerr << "Cannot open file " << _chkp_name.c_str() << " !"
+				<< std::endl;
 		return 1;
 	}
-	std::cout<<"File "<<_chkp_name.c_str()<<" has been opened"<<std::endl;
-
+	std::cout << "File " << _chkp_name.c_str() << " has been opened"
+			<< std::endl;
 
 	//write header information to file
-	output<< "Header"<<std::endl;
-	output<< _parameters.parallel.localSize[0]<<" "<<_parameters.parallel.localSize[1]<<" "<<_parameters.parallel.localSize[2]<<std::endl;
+	output << "Header" << std::endl;
+	output << _parameters.parallel.localSize[0] << " "
+			<< _parameters.parallel.localSize[1] << " "
+			<< _parameters.parallel.localSize[2] << std::endl;
 
 	//loop over each element in the list
 	std::list<field_data>::const_iterator it;
 	for (it = _data_list.begin(); it != _data_list.end(); ++it) {
-	    std::cout << (*it).name<<std::endl;
-	    output<<(*it).name<<std::endl;
+		std::cout << (*it).name << std::endl;
+		output << (*it).name << std::endl;
 
-
-	    //try cast it to scalarfield
-	    try{
-	    	ScalarField & sf= dynamic_cast<ScalarField &>((*it).field);
-	    	int buf_length;
-	    	int counter=0;
-	    	byte *buf;
-
-	    	if(_parameters.geometry.dim==2){
-	    	    //create buffer which is exactly as long as it needs to be
-	    	    buf_length = sf.getNx()*sf.getNy()*sizeof(FLOAT);
-	    	    buf= new byte[buf_length];
-
-	    		 for(int i=0;i<sf.getNx();i++){
-					for(int j=0;j<sf.getNy();j++){
-						populateBytes(sf.getScalar(i,j),buf+counter, counter);
+		//try cast it to scalarfield
+		try {
+			ScalarField & sf = dynamic_cast<ScalarField &>((*it).field);
+			if (_parameters.geometry.dim == 2) {
+				for (int i = 0; i < sf.getNx(); i++) {
+					for (int j = 0; j < sf.getNy(); j++) {
+						struct X {
+							double a;
+						} x;
+						x.a=sf.getScalar(i,j);
+						output.write(reinterpret_cast<const char *> (&sf.getScalar(i,j)), sizeof(FLOAT));
 					}
 				}
+				std::cout<< std::endl;
 
-	    		 output<<buf;
-	    	}else{
-	    		//create buffer which is exactly as long as it needs to be
-				buf_length = sf.getNx()*sf.getNy()*sf.getNz()*sizeof(FLOAT);
-				buf= new byte[buf_length];
-
-				for(int i=0;i<sf.getNx();i++){
-					for(int j=0;j<sf.getNy();j++){
-						for(int k=0;k<sf.getNz();k++){
-							populateBytes(sf.getScalar(i,j,k),buf+counter, counter);
+			} else {
+				for (int i = 0; i < sf.getNx(); i++) {
+					for (int j = 0; j < sf.getNy(); j++) {
+						for (int k = 0; k < sf.getNz(); k++) {
+							output.write(reinterpret_cast<const char *> (&sf.getScalar(i,j, k)), sizeof(FLOAT));
 						}
 					}
 				}
+			}
 
-				output<<buf;
-	    	}
-
-	    }catch(const std::bad_cast& e) {
-	    	try{
-				VectorField & vf= dynamic_cast<VectorField &>((*it).field);
-
-				if(_parameters.geometry.dim==2){
-						 for(int i=0;i<vf.getNx();i++){
-							for(int j=0;j<vf.getNy();j++){
-									output<<vf.getVector(i,j)[0]<<" "<<vf.getVector(i,j)[1]<<" ";
-							}
+		} catch (const std::bad_cast& e) {
+			try {
+				VectorField & vf = dynamic_cast<VectorField &>((*it).field);
+				if (_parameters.geometry.dim == 2) {
+					for (int i = 0; i < vf.getNx(); i++) {
+						for (int j = 0; j < vf.getNy(); j++) {
+							output.write(reinterpret_cast<const char *> (&vf.getVector(i,j)[0]), sizeof(FLOAT));
+							output.write(reinterpret_cast<const char *> (&vf.getVector(i,j)[1]), sizeof(FLOAT));
 						}
-					}else{
-						for(int i=0;i<vf.getNx();i++){
-							for(int j=0;j<vf.getNy();j++){
-								for(int k=0;k<vf.getNz();k++){
-									output<<vf.getVector(i,j,k)[0]
-								     <<" "<<vf.getVector(i,j,k)[1]
-									 <<" "<<vf.getVector(i,j,k)[1]<<" ";
-								}
+					}
+				} else {
+					for (int i = 0; i < vf.getNx(); i++) {
+						for (int j = 0; j < vf.getNy(); j++) {
+							for (int k = 0; k < vf.getNz(); k++) {
+								output.write(reinterpret_cast<const char *> (&vf.getVector(i,j, k)[0]), sizeof(FLOAT));
+								output.write(reinterpret_cast<const char *> (&vf.getVector(i,j, k)[1]), sizeof(FLOAT));
+								output.write(reinterpret_cast<const char *> (&vf.getVector(i,j, k)[2]), sizeof(FLOAT));
 							}
 						}
 					}
+				}
 
-			}catch(const std::bad_cast& e) {
-				std::cerr<<"Field "<<(*it).name<<" is not a Scalar or Vector field. Creating checkpoint failed!";
+			} catch (const std::bad_cast& e) {
+				std::cerr << "Field " << (*it).name
+						<< " is not a Scalar or Vector field. Creating checkpoint failed!";
 				output.close();
 				return 1;
 			}
-	    }
+		}
 
-	    output<<std::endl;
+		output << std::endl;
 	}
 
 	output.close();
@@ -203,28 +199,15 @@ int Checkpoint::write(){
 	return 0;
 }
 
-inline void Checkpoint::populateBytes(FLOAT tmp, byte* buffer, int &counter){/*
-	union{
-		FLOAT tmp_float;
-		byte binary[sizeof(FLOAT)];
-	}convert;
 
-
-	convert.tmp_float = tmp;*/
-	for(unsigned int i=0;i<sizeof(FLOAT);i++){
-		*(buffer+i)=1;//convert.binary[sizeof(FLOAT)-i-1];
-	}
-
-	counter+=sizeof(FLOAT);
-}
-
-int Checkpoint::read(){
+int Checkpoint::read() {
 	chk_print("Read in checkpoint");
 
 	return 0;
 }
-void Checkpoint::chk_print(std::string msg){
-	std::cout<<"Chkp["<<_rank<<"] -> "<<msg<<std::endl;
+void Checkpoint::chk_print(std::string msg) {
+	std::cout << "Chkp[" << _rank << "] -> " << msg << std::endl;
 }
 
-Checkpoint::~Checkpoint() {}
+Checkpoint::~Checkpoint() {
+}
