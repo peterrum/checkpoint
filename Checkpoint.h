@@ -16,6 +16,8 @@ struct field_data{
 	Field<FLOAT>& field;
 };
 
+typedef unsigned char byte;
+
 class Checkpoint {
 public:
 	Checkpoint(Parameters & parameters);
@@ -23,6 +25,7 @@ public:
 
 	void add(Field<FLOAT>& field, std::string name);
 	int write_ascii();
+	int write();
 	int read();
 
 private:
@@ -33,6 +36,7 @@ private:
 	int _chkp_counter;
 	int _rank;
 	void chk_print(std::string msg);
+	void populateBytes(FLOAT tmp, byte* buffer, int &counter);
 };
 
 

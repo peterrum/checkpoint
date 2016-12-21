@@ -108,6 +108,116 @@ int Checkpoint::write_ascii(){
 	return 0;
 }
 
+int Checkpoint::write(){
+	chk_print("Write out checkpoint #"+_chkp_counter);
+	//Open file
+	std::ofstream output (_chkp_name.c_str(), std::ios::out | std::ios::binary);
+	if (!output.is_open()){
+		std::cerr<<"Cannot open file "<<_chkp_name.c_str()<<" !"<<std::endl;
+		return 1;
+	}
+	std::cout<<"File "<<_chkp_name.c_str()<<" has been opened"<<std::endl;
+
+
+	//write header information to file
+	output<< "Header"<<std::endl;
+	output<< _parameters.parallel.localSize[0]<<" "<<_parameters.parallel.localSize[1]<<" "<<_parameters.parallel.localSize[2]<<std::endl;
+
+	//loop over each element in the list
+	std::list<field_data>::const_iterator it;
+	for (it = _data_list.begin(); it != _data_list.end(); ++it) {
+	    std::cout << (*it).name<<std::endl;
+	    output<<(*it).name<<std::endl;
+
+
+	    //try cast it to scalarfield
+	    try{
+	    	ScalarField & sf= dynamic_cast<ScalarField &>((*it).field);
+	    	int buf_length;
+	    	int counter=0;
+	    	byte *buf;
+
+	    	if(_parameters.geometry.dim==2){
+	    	    //create buffer which is exactly as long as it needs to be
+	    	    buf_length = sf.getNx()*sf.getNy()*sizeof(FLOAT);
+	    	    buf= new byte[buf_length];
+
+	    		 for(int i=0;i<sf.getNx();i++){
+					for(int j=0;j<sf.getNy();j++){
+						populateBytes(sf.getScalar(i,j),buf+counter, counter);
+					}
+				}
+
+	    		 output<<buf;
+	    	}else{
+	    		//create buffer which is exactly as long as it needs to be
+				buf_length = sf.getNx()*sf.getNy()*sf.getNz()*sizeof(FLOAT);
+				buf= new byte[buf_length];
+
+				for(int i=0;i<sf.getNx();i++){
+					for(int j=0;j<sf.getNy();j++){
+						for(int k=0;k<sf.getNz();k++){
+							populateBytes(sf.getScalar(i,j,k),buf+counter, counter);
+						}
+					}
+				}
+
+				output<<buf;
+	    	}
+
+	    }catch(const std::bad_cast& e) {
+	    	try{
+				VectorField & vf= dynamic_cast<VectorField &>((*it).field);
+
+				if(_parameters.geometry.dim==2){
+						 for(int i=0;i<vf.getNx();i++){
+							for(int j=0;j<vf.getNy();j++){
+									output<<vf.getVector(i,j)[0]<<" "<<vf.getVector(i,j)[1]<<" ";
+							}
+						}
+					}else{
+						for(int i=0;i<vf.getNx();i++){
+							for(int j=0;j<vf.getNy();j++){
+								for(int k=0;k<vf.getNz();k++){
+									output<<vf.getVector(i,j,k)[0]
+								     <<" "<<vf.getVector(i,j,k)[1]
+									 <<" "<<vf.getVector(i,j,k)[1]<<" ";
+								}
+							}
+						}
+					}
+
+			}catch(const std::bad_cast& e) {
+				std::cerr<<"Field "<<(*it).name<<" is not a Scalar or Vector field. Creating checkpoint failed!";
+				output.close();
+				return 1;
+			}
+	    }
+
+	    output<<std::endl;
+	}
+
+	output.close();
+
+	_chkp_counter++;
+	return 0;
+}
+
+inline void Checkpoint::populateBytes(FLOAT tmp, byte* buffer, int &counter){/*
+	union{
+		FLOAT tmp_float;
+		byte binary[sizeof(FLOAT)];
+	}convert;
+
+
+	convert.tmp_float = tmp;*/
+	for(unsigned int i=0;i<sizeof(FLOAT);i++){
+		*(buffer+i)=1;//convert.binary[sizeof(FLOAT)-i-1];
+	}
+
+	counter+=sizeof(FLOAT);
+}
+
 int Checkpoint::read(){
 	chk_print("Read in checkpoint");
 
