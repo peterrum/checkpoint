@@ -27,23 +27,24 @@ void Checkpoint::add(Field<FLOAT> & field, std::string name) {
 	chk_print("Added Field " + name);
 }
 
-int Checkpoint::write_ascii() {
+std::string Checkpoint::write_ascii(FLOAT time) {
 	chk_print("Write out checkpoint #" + _chkp_counter);
 	//Open file
 	std::ofstream output(_chkp_name.c_str(), std::ios::out | std::ios::binary);
 	if (!output.is_open()) {
 		std::cerr << "Cannot open file " << _chkp_name.c_str() << " !"
 				<< std::endl;
-		return 1;
+		return "ERROR";
 	}
 	std::cout << "File " << _chkp_name.c_str() << " has been opened"
 			<< std::endl;
 
 	//write header information to file
 	output << "Header" << std::endl;
-	output << _parameters.parallel.localSize[0] << " "
-			<< _parameters.parallel.localSize[1] << " "
-			<< _parameters.parallel.localSize[2] << std::endl;
+	output << binary << " " << time << " "
+	<< _parameters.parallel.localSize[0] << " "
+	<< _parameters.parallel.localSize[1] << " "
+	<< _parameters.parallel.localSize[2] << std::endl;
 
 	//loop over each element in the list
 	std::list<field_data>::const_iterator it;
@@ -98,7 +99,7 @@ int Checkpoint::write_ascii() {
 				std::cerr << "Field " << (*it).name
 						<< " is not a Scalar or Vector field. Creating checkpoint failed!";
 				output.close();
-				return 1;
+				return "ERROR";
 			}
 		}
 
@@ -108,24 +109,25 @@ int Checkpoint::write_ascii() {
 	output.close();
 
 	_chkp_counter++;
-	return 0;
+	return _chkp_name.c_str();
 }
 
-int Checkpoint::write() {
+std::string Checkpoint::write(FLOAT time) {
 	chk_print("Write out checkpoint #" + _chkp_counter);
 	//Open file
 	std::ofstream output(_chkp_name.c_str(), std::ios::out | std::ios::binary);
 	if (!output.is_open()) {
 		std::cerr << "Cannot open file " << _chkp_name.c_str() << " !"
 				<< std::endl;
-		return 1;
+		return "ERROR";
 	}
 	std::cout << "File " << _chkp_name.c_str() << " has been opened"
 			<< std::endl;
 
 	//write header information to file
-	output << "Header" << std::endl;
-	output << _parameters.parallel.localSize[0] << " "
+	output << header << std::endl;
+	output << binary << " " << time << " "
+			<< _parameters.parallel.localSize[0] << " "
 			<< _parameters.parallel.localSize[1] << " "
 			<< _parameters.parallel.localSize[2] << std::endl;
 
@@ -144,17 +146,21 @@ int Checkpoint::write() {
 						struct X {
 							double a;
 						} x;
-						x.a=sf.getScalar(i,j);
-						output.write(reinterpret_cast<const char *> (&sf.getScalar(i,j)), sizeof(FLOAT));
+						x.a = sf.getScalar(i, j);
+						output.write(
+								reinterpret_cast<const char *>(&sf.getScalar(i,
+										j)), sizeof(FLOAT));
 					}
 				}
-				std::cout<< std::endl;
+				std::cout << std::endl;
 
 			} else {
 				for (int i = 0; i < sf.getNx(); i++) {
 					for (int j = 0; j < sf.getNy(); j++) {
 						for (int k = 0; k < sf.getNz(); k++) {
-							output.write(reinterpret_cast<const char *> (&sf.getScalar(i,j, k)), sizeof(FLOAT));
+							output.write(
+									reinterpret_cast<const char *>(&sf.getScalar(
+											i, j, k)), sizeof(FLOAT));
 						}
 					}
 				}
@@ -166,17 +172,27 @@ int Checkpoint::write() {
 				if (_parameters.geometry.dim == 2) {
 					for (int i = 0; i < vf.getNx(); i++) {
 						for (int j = 0; j < vf.getNy(); j++) {
-							output.write(reinterpret_cast<const char *> (&vf.getVector(i,j)[0]), sizeof(FLOAT));
-							output.write(reinterpret_cast<const char *> (&vf.getVector(i,j)[1]), sizeof(FLOAT));
+							output.write(
+									reinterpret_cast<const char *>(&vf.getVector(
+											i, j)[0]), sizeof(FLOAT));
+							output.write(
+									reinterpret_cast<const char *>(&vf.getVector(
+											i, j)[1]), sizeof(FLOAT));
 						}
 					}
 				} else {
 					for (int i = 0; i < vf.getNx(); i++) {
 						for (int j = 0; j < vf.getNy(); j++) {
 							for (int k = 0; k < vf.getNz(); k++) {
-								output.write(reinterpret_cast<const char *> (&vf.getVector(i,j, k)[0]), sizeof(FLOAT));
-								output.write(reinterpret_cast<const char *> (&vf.getVector(i,j, k)[1]), sizeof(FLOAT));
-								output.write(reinterpret_cast<const char *> (&vf.getVector(i,j, k)[2]), sizeof(FLOAT));
+								output.write(
+										reinterpret_cast<const char *>(&vf.getVector(
+												i, j, k)[0]), sizeof(FLOAT));
+								output.write(
+										reinterpret_cast<const char *>(&vf.getVector(
+												i, j, k)[1]), sizeof(FLOAT));
+								output.write(
+										reinterpret_cast<const char *>(&vf.getVector(
+												i, j, k)[2]), sizeof(FLOAT));
 							}
 						}
 					}
@@ -186,7 +202,7 @@ int Checkpoint::write() {
 				std::cerr << "Field " << (*it).name
 						<< " is not a Scalar or Vector field. Creating checkpoint failed!";
 				output.close();
-				return 1;
+				return "ERROR";
 			}
 		}
 
@@ -196,15 +212,62 @@ int Checkpoint::write() {
 	output.close();
 
 	_chkp_counter++;
-	return 0;
+	return _chkp_name.c_str();
 }
 
-
-int Checkpoint::read() {
+FLOAT Checkpoint::read(std::string filename) {
+	FLOAT time;
 	chk_print("Read in checkpoint");
+	std::fstream input(filename, std::ios::in | std::ios::binary);
+
+	std::string line;
+
+	getline(input, line);
+	if(line.compare(header)==0){
+		getline(input, line, ' ');
+		bool bin=true;
+		if(line.compare(binary)==0){
+			bin=true;
+		}else if (line.compare(ascii)==0){
+			bin=false;
+		}else
+			return -1; //wrong file format
+		getline(input, line, ' ');
+		time = (FLOAT) stod(line);
+
+		getline(input, line, ' ');
+		bool size=true;
+		if(stoi(line) != _parameters.parallel.localSize[0]) size=false;
+		getline(input, line, ' ');
+		if(stoi(line) != _parameters.parallel.localSize[1]) size=false;
+		getline(input, line, ' ');
+		if(stoi(line) != _parameters.parallel.localSize[2]) size=false;
+
+		std::cout<< "Binary? " << bin << "size: " << _parameters.parallel.localSize[0] << " " <<
+				_parameters.parallel.localSize[1] << " " <<
+				_parameters.parallel.localSize[2] << std::endl;
+
+		if(bin)
+			if(readBinary(input)!=0) return -1;
+		else
+			if(readASCII(input)!=0)return -1;
+
+	}else{
+		return -1;
+	}
+	return time;
+}
+int Checkpoint::readBinary(std::fstream &input){
 
 	return 0;
 }
+
+int Checkpoint::readASCII(std::fstream &input){
+
+	return 0;
+}
+
+
 void Checkpoint::chk_print(std::string msg) {
 	std::cout << "Chkp[" << _rank << "] -> " << msg << std::endl;
 }

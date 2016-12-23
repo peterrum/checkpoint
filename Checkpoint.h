@@ -10,6 +10,7 @@
 #include <ostream>
 #include <sstream>
 #include <typeinfo>
+#include <string>
 
 struct field_data{
 	std::string name;
@@ -24,9 +25,9 @@ public:
 	virtual ~Checkpoint();
 
 	void add(Field<FLOAT>& field, std::string name);
-	int write_ascii();
-	int write();
-	int read();
+	std::string write_ascii(FLOAT time);
+	std::string write(FLOAT time);
+	FLOAT read(std::string);
 
 private:
 	Parameters &_parameters;
@@ -36,6 +37,12 @@ private:
 	int _chkp_counter;
 	int _rank;
 	void chk_print(std::string msg);
+	int readBinary(std::fstream &stream);
+	int readASCII(std::fstream &stream);
+
+	const std::string header="Header";
+	const std::string ascii="ASCII";
+	const std::string binary="BIN";
 };
 
 
