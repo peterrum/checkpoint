@@ -22,7 +22,7 @@ Checkpoint::Checkpoint(Parameters & parameters) :
  *
  */
 void Checkpoint::add(Field<FLOAT> & field, std::string name) {
-	struct field_data fd = { name, field };
+	field_data fd = { name, field };
 	_data_list.push_back(fd);
 	chk_print("Added Field " + name);
 }
@@ -41,10 +41,9 @@ std::string Checkpoint::write_ascii(FLOAT time) {
 
 	//write header information to file
 	output << "Header" << std::endl;
-	output << binary << " " << time << " "
-	<< _parameters.parallel.localSize[0] << " "
-	<< _parameters.parallel.localSize[1] << " "
-	<< _parameters.parallel.localSize[2] << std::endl;
+	output << ascii << " " << time << " " << _parameters.parallel.localSize[0]
+			<< " " << _parameters.parallel.localSize[1] << " "
+			<< _parameters.parallel.localSize[2] << std::endl;
 
 	//loop over each element in the list
 	std::list<field_data>::const_iterator it;
@@ -126,9 +125,8 @@ std::string Checkpoint::write(FLOAT time) {
 
 	//write header information to file
 	output << header << std::endl;
-	output << binary << " " << time << " "
-			<< _parameters.parallel.localSize[0] << " "
-			<< _parameters.parallel.localSize[1] << " "
+	output << binary << " " << time << " " << _parameters.parallel.localSize[0]
+			<< " " << _parameters.parallel.localSize[1] << " "
 			<< _parameters.parallel.localSize[2] << std::endl;
 
 	//loop over each element in the list
@@ -223,50 +221,126 @@ FLOAT Checkpoint::read(std::string filename) {
 	std::string line;
 
 	getline(input, line);
-	if(line.compare(header)==0){
+	if (line.compare(header) == 0) {
 		getline(input, line, ' ');
-		bool bin=true;
-		if(line.compare(binary)==0){
-			bin=true;
-		}else if (line.compare(ascii)==0){
-			bin=false;
-		}else
+		bool bin = true;
+		if (line.compare(binary) == 0) {
+			bin = true;
+		} else if (line.compare(ascii) == 0) {
+			bin = false;
+		} else
 			return -1; //wrong file format
 		getline(input, line, ' ');
 		time = (FLOAT) stod(line);
 
 		getline(input, line, ' ');
-		bool size=true;
-		if(stoi(line) != _parameters.parallel.localSize[0]) size=false;
+		bool size = true;
+		if (stoi(line) != _parameters.parallel.localSize[0])
+			size = false;
 		getline(input, line, ' ');
-		if(stoi(line) != _parameters.parallel.localSize[1]) size=false;
-		getline(input, line, ' ');
-		if(stoi(line) != _parameters.parallel.localSize[2]) size=false;
+		if (stoi(line) != _parameters.parallel.localSize[1])
+			size = false;
+		getline(input, line);
+		if (stoi(line) != _parameters.parallel.localSize[2])
+			size = false;
 
-		std::cout<< "Binary? " << bin << "size: " << _parameters.parallel.localSize[0] << " " <<
-				_parameters.parallel.localSize[1] << " " <<
-				_parameters.parallel.localSize[2] << std::endl;
+		std::cout << "Binary? " << bin << " size: "
+				<< _parameters.parallel.localSize[0] << " "
+				<< _parameters.parallel.localSize[1] << " "
+				<< _parameters.parallel.localSize[2] << std::endl;
 
-		if(bin)
-			if(readBinary(input)!=0) return -1;
-		else
-			if(readASCII(input)!=0)return -1;
+		if (bin){
+			if (readBinary(input) != 0)
+				return -1;
+		}
+		else if (readASCII(input) != 0)
+				return -1;
 
-	}else{
+	} else {
 		return -1;
 	}
 	return time;
 }
-int Checkpoint::readBinary(std::fstream &input){
+int Checkpoint::readBinary(std::fstream &input) {
 
 	return 0;
 }
 
-int Checkpoint::readASCII(std::fstream &input){
+int Checkpoint::readASCII(std::fstream &input) {
 
+	std::cout << "read ASCII" << std::endl;
+	std::string line;
+	while (getline(input, line)) {
+		std::cout << " while: "<< line << std::endl;
+		std::list<field_data>::const_iterator it;
+		for (it = _data_list.begin(); it != _data_list.end(); ++it) {
+			if (line.compare((*it).name) == 0) {
+				std::cout << "READ " << (*it).name << std::endl;
+				try {
+					ScalarField & sf = dynamic_cast<ScalarField &>((*it).field);
+					if (_parameters.geometry.dim == 2) {
+						for (int i = 0; i < sf.getNx(); i++) {
+							for (int j = 0; j < sf.getNy(); j++) {
+								getline(input, line, ' ');
+								sf.getScalar(i, j) = atof(line.c_str());
+							}
+						}
+					} else {
+						for (int i = 0; i < sf.getNx(); i++) {
+							for (int j = 0; j < sf.getNy(); j++) {
+								for (int k = 0; k < sf.getNz(); k++) {
+									getline(input, line, ' ');
+									sf.getScalar(i, j, k) = atof(line.c_str());
+								}
+							}
+						}
+					}
+
+				} catch (const std::bad_cast& e) {
+					try {
+						VectorField & vf =
+								dynamic_cast<VectorField &>((*it).field);
+						if (_parameters.geometry.dim == 2) {
+							for (int i = 0; i < vf.getNx(); i++) {
+								for (int j = 0; j < vf.getNy(); j++) {
+									getline(input, line, ' ');
+									vf.getVector(i, j)[0] = atof(line.c_str());
+									getline(input, line, ' ');
+									vf.getVector(i, j)[1] = atof(line.c_str());
+								}
+							}
+						} else {
+							for (int i = 0; i < vf.getNx(); i++) {
+								for (int j = 0; j < vf.getNy(); j++) {
+									for (int k = 0; k < vf.getNz(); k++) {
+										getline(input, line, ' ');
+										vf.getVector(i, j, k)[0] = atof(
+												line.c_str());
+										getline(input, line, ' ');
+										vf.getVector(i, j, k)[1] = atof(
+												line.c_str());
+										getline(input, line, ' ');
+										vf.getVector(i, j, k)[2] = atof(
+												line.c_str());
+									}
+								}
+							}
+						}
+
+					} catch (const std::bad_cast& e) {
+						std::cerr << "Field " << (*it).name
+								<< " is not a Scalar or Vector field. Reading checkpoint failed!";
+						input.close();
+						return -1;
+					}
+				}
+			}else{
+//				std::cout << "Line: " << line << " does not equal " << (*it).name << std::endl;
+			}
+		}
+	}
 	return 0;
 }
-
 
 void Checkpoint::chk_print(std::string msg) {
 	std::cout << "Chkp[" << _rank << "] -> " << msg << std::endl;
