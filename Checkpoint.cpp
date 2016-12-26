@@ -263,7 +263,72 @@ FLOAT Checkpoint::read(std::string filename) {
 }
 int Checkpoint::readBinary(std::fstream &input) {
 
-	return 0;
+	std::cout << "read BINARY" << std::endl;
+		std::string line;
+		while (getline(input, line)) {
+			std::cout << " while: "<< line << std::endl;
+			std::list<field_data>::const_iterator it;
+			for (it = _data_list.begin(); it != _data_list.end(); ++it) {
+				if (line.compare((*it).name) == 0) {
+					std::cout << "READ " << (*it).name << std::endl;
+					try {
+						ScalarField & sf = dynamic_cast<ScalarField &>((*it).field);
+						if (_parameters.geometry.dim == 2) {
+							for (int i = 0; i < sf.getNx(); i++) {
+								for (int j = 0; j < sf.getNy(); j++) {
+									input.read(reinterpret_cast<char *>(&sf.getScalar(
+											i, j)), sizeof(FLOAT));
+								}
+							}
+						} else {
+							for (int i = 0; i < sf.getNx(); i++) {
+								for (int j = 0; j < sf.getNy(); j++) {
+									for (int k = 0; k < sf.getNz(); k++) {
+										input.read(reinterpret_cast<char *>(&sf.getScalar(
+											i, j, k)), sizeof(FLOAT));
+									}
+								}
+							}
+						}
+
+					} catch (const std::bad_cast& e) {
+						try {
+							VectorField & vf =
+									dynamic_cast<VectorField &>((*it).field);
+							if (_parameters.geometry.dim == 2) {
+								for (int i = 0; i < vf.getNx(); i++) {
+									for (int j = 0; j < vf.getNy(); j++) {
+										input.read(reinterpret_cast<char *>(&vf.getVector(i, j)[0]), sizeof(FLOAT));
+										input.read(reinterpret_cast<char *>(&vf.getVector(i, j)[1]), sizeof(FLOAT));
+
+									}
+								}
+							} else {
+								for (int i = 0; i < vf.getNx(); i++) {
+									for (int j = 0; j < vf.getNy(); j++) {
+										for (int k = 0; k < vf.getNz(); k++) {
+											input.read(reinterpret_cast<char *>(&vf.getVector(i, j, k)[0]), sizeof(FLOAT));
+											input.read(reinterpret_cast<char *>(&vf.getVector(i, j, k)[1]), sizeof(FLOAT));
+											input.read(reinterpret_cast<char *>(&vf.getVector(i, j, k)[2]), sizeof(FLOAT));
+
+										}
+									}
+								}
+							}
+
+						} catch (const std::bad_cast& e) {
+							std::cerr << "Field " << (*it).name
+									<< " is not a Scalar or Vector field. Reading checkpoint failed!";
+							input.close();
+							return -1;
+						}
+					}
+				}else{
+	//				happens often, but no need to do anything
+				}
+			}
+		}
+		return 0;
 }
 
 int Checkpoint::readASCII(std::fstream &input) {
@@ -335,7 +400,7 @@ int Checkpoint::readASCII(std::fstream &input) {
 					}
 				}
 			}else{
-//				std::cout << "Line: " << line << " does not equal " << (*it).name << std::endl;
+//				happens often, but no need to do anything
 			}
 		}
 	}
