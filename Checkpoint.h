@@ -26,8 +26,8 @@ public:
 
 	void add(Field<FLOAT>& field, std::string name);
 	std::string write_ascii(FLOAT time);
-	std::string write(FLOAT time);
-	FLOAT read(std::string);
+	std::string write(FLOAT sim_time, int iteration);
+	int read(std::string filename, FLOAT &sim_time, int &iteration);
 
 private:
 	Parameters &_parameters;
@@ -40,9 +40,9 @@ private:
 	int readBinary(std::fstream &stream);
 	int readASCII(std::fstream &stream);
 
-	const std::string header="Header";
-	const std::string ascii="ASCII";
-	const std::string binary="BIN";
+	const std::string header;
+	const std::string ascii;
+	const std::string binary;
 };
 
 

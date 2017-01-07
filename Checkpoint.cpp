@@ -1,17 +1,25 @@
 #include "Checkpoint.h"
 
 Checkpoint::Checkpoint(Parameters & parameters) :
-		_parameters(parameters), _chkp_counter(0) {
+		_parameters(parameters),
+		_chkp_counter(0),
+		header("HEADER"),
+		ascii("ASCII"),
+		binary("BIN"){
 	MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
-	const int dir_err = system("mkdir -p checkpoint/data");
+	std::stringstream ss("");
+	ss<<"mkdir -p checkpoint/data/rank_"<<_rank;
+	const int dir_err = system(ss.str().c_str());
 	if (-1 == dir_err) {
-		perror("Cannot create checkpoint/data folder!");
+		ss.str("");
+		ss<<"Cannot create "<<"checkpoint/data/rank_"<<_rank <<"folder!";
+		perror(ss.str().c_str());
 		exit(1);
 	}
 	_localsize = parameters.parallel.localSize;
 
 	std::stringstream tmp_chk_name("");
-	tmp_chk_name << "checkpoint/data/chkp_" << parameters.simulation.scenario
+	tmp_chk_name << "checkpoint/data/"<<"rank_"<<_rank<<"/"<<"chkp_" << parameters.simulation.scenario
 			<< "_" << _localsize[0] << "x" << _localsize[1] << "x"
 			<< _localsize[2];
 	_chkp_name = tmp_chk_name.str();
@@ -111,21 +119,23 @@ std::string Checkpoint::write_ascii(FLOAT time) {
 	return _chkp_name.c_str();
 }
 
-std::string Checkpoint::write(FLOAT time) {
+std::string Checkpoint::write(FLOAT sim_time, int iteration) {
 	chk_print("Write out checkpoint #" + _chkp_counter);
+	std::stringstream ss("");
+	ss<<_chkp_name<<"_"<<iteration;
 	//Open file
-	std::ofstream output(_chkp_name.c_str(), std::ios::out | std::ios::binary);
+	std::ofstream output(ss.str().c_str(), std::ios::out | std::ios::binary);
 	if (!output.is_open()) {
-		std::cerr << "Cannot open file " << _chkp_name.c_str() << " !"
+		std::cerr << "Cannot open file " << ss.str().c_str() << " !"
 				<< std::endl;
 		return "ERROR";
 	}
-	std::cout << "File " << _chkp_name.c_str() << " has been opened"
+	std::cout << "File " << ss.str().c_str() << " has been opened"
 			<< std::endl;
 
 	//write header information to file
 	output << header << std::endl;
-	output << binary << " " << time << " " << _parameters.parallel.localSize[0]
+	output << binary << " " << sim_time << " " << _parameters.parallel.localSize[0]
 			<< " " << _parameters.parallel.localSize[1] << " "
 			<< _parameters.parallel.localSize[2] << std::endl;
 
@@ -141,10 +151,11 @@ std::string Checkpoint::write(FLOAT time) {
 			if (_parameters.geometry.dim == 2) {
 				for (int i = 0; i < sf.getNx(); i++) {
 					for (int j = 0; j < sf.getNy(); j++) {
+						/*
 						struct X {
 							double a;
 						} x;
-						x.a = sf.getScalar(i, j);
+						x.a = sf.getScalar(i, j);*/
 						output.write(
 								reinterpret_cast<const char *>(&sf.getScalar(i,
 										j)), sizeof(FLOAT));
@@ -213,9 +224,20 @@ std::string Checkpoint::write(FLOAT time) {
 	return _chkp_name.c_str();
 }
 
-FLOAT Checkpoint::read(std::string filename) {
-	FLOAT time;
-	chk_print("Read in checkpoint");
+int Checkpoint::read(std::string filename, FLOAT &sim_time, int &iteration) {
+	if(filename == ""){
+		std::cerr<<"Filepath was empty! Aborting..."<<std::endl;
+		return -1;
+	}
+
+    std::ifstream tmp_file(filename.c_str());
+    if(!tmp_file.good()){
+		std::cerr<<"Could not find file "<<filename<<std::endl;
+		tmp_file.close();
+		return -1;
+    }
+    tmp_file.close();
+
 	std::fstream input(filename, std::ios::in | std::ios::binary);
 
 	std::string line;
@@ -231,18 +253,9 @@ FLOAT Checkpoint::read(std::string filename) {
 		} else
 			return -1; //wrong file format
 		getline(input, line, ' ');
-		time = (FLOAT) stod(line);
+		sim_time = (FLOAT) stod(line);
 
 		getline(input, line, ' ');
-		bool size = true;
-		if (stoi(line) != _parameters.parallel.localSize[0])
-			size = false;
-		getline(input, line, ' ');
-		if (stoi(line) != _parameters.parallel.localSize[1])
-			size = false;
-		getline(input, line);
-		if (stoi(line) != _parameters.parallel.localSize[2])
-			size = false;
 
 		std::cout << "Binary? " << bin << " size: "
 				<< _parameters.parallel.localSize[0] << " "
@@ -259,18 +272,26 @@ FLOAT Checkpoint::read(std::string filename) {
 	} else {
 		return -1;
 	}
-	return time;
+
+	//find iteration from filename
+	std::size_t found = filename.find_last_of("_");
+	std::string iter_str = filename.substr(found+1);
+
+	iteration = stoi(iter_str);
+
+
+	return 1;
 }
 int Checkpoint::readBinary(std::fstream &input) {
 
-	std::cout << "read BINARY" << std::endl;
+	//std::cout << "read BINARY" << std::endl;
 		std::string line;
 		while (getline(input, line)) {
-			std::cout << " while: "<< line << std::endl;
+			//std::cout << " while: "<< line << std::endl;
 			std::list<field_data>::const_iterator it;
 			for (it = _data_list.begin(); it != _data_list.end(); ++it) {
 				if (line.compare((*it).name) == 0) {
-					std::cout << "READ " << (*it).name << std::endl;
+					//std::cout << "READ " << (*it).name << std::endl;
 					try {
 						ScalarField & sf = dynamic_cast<ScalarField &>((*it).field);
 						if (_parameters.geometry.dim == 2) {
@@ -333,14 +354,14 @@ int Checkpoint::readBinary(std::fstream &input) {
 
 int Checkpoint::readASCII(std::fstream &input) {
 
-	std::cout << "read ASCII" << std::endl;
+	//std::cout << "read ASCII" << std::endl;
 	std::string line;
 	while (getline(input, line)) {
-		std::cout << " while: "<< line << std::endl;
+		//std::cout << " while: "<< line << std::endl;
 		std::list<field_data>::const_iterator it;
 		for (it = _data_list.begin(); it != _data_list.end(); ++it) {
 			if (line.compare((*it).name) == 0) {
-				std::cout << "READ " << (*it).name << std::endl;
+				//std::cout << "READ " << (*it).name << std::endl;
 				try {
 					ScalarField & sf = dynamic_cast<ScalarField &>((*it).field);
 					if (_parameters.geometry.dim == 2) {
