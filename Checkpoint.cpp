@@ -120,7 +120,6 @@ std::string Checkpoint::write_ascii(FLOAT time) {
 }
 
 std::string Checkpoint::write(FLOAT sim_time, int iteration) {
-	chk_print("Write out checkpoint #" + _chkp_counter);
 	std::stringstream ss("");
 	ss<<_chkp_name<<"_"<<iteration;
 	//Open file
@@ -142,7 +141,7 @@ std::string Checkpoint::write(FLOAT sim_time, int iteration) {
 	//loop over each element in the list
 	std::list<field_data>::const_iterator it;
 	for (it = _data_list.begin(); it != _data_list.end(); ++it) {
-		std::cout << (*it).name << std::endl;
+		//std::cout << (*it).name << std::endl;
 		output << (*it).name << std::endl;
 
 		//try cast it to scalarfield
@@ -151,17 +150,13 @@ std::string Checkpoint::write(FLOAT sim_time, int iteration) {
 			if (_parameters.geometry.dim == 2) {
 				for (int i = 0; i < sf.getNx(); i++) {
 					for (int j = 0; j < sf.getNy(); j++) {
-						/*
-						struct X {
-							double a;
-						} x;
-						x.a = sf.getScalar(i, j);*/
+
 						output.write(
 								reinterpret_cast<const char *>(&sf.getScalar(i,
 										j)), sizeof(FLOAT));
 					}
 				}
-				std::cout << std::endl;
+				//std::cout << std::endl;
 
 			} else {
 				for (int i = 0; i < sf.getNx(); i++) {
