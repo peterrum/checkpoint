@@ -233,7 +233,7 @@ int Checkpoint::read(std::string filename, FLOAT &sim_time, int &iteration) {
     }
     tmp_file.close();
 
-	std::fstream input(filename, std::ios::in | std::ios::binary);
+	std::fstream input(filename.c_str(), std::ios::in | std::ios::binary);
 
 	std::string line;
 
