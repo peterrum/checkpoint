@@ -248,7 +248,7 @@ int Checkpoint::read(std::string filename, FLOAT &sim_time, int &iteration) {
 		} else
 			return -1; //wrong file format
 		getline(input, line, ' ');
-		sim_time = (FLOAT) stod(line);
+		sim_time = (FLOAT) atof(line.c_str());
 
 		getline(input, line, ' ');
 
@@ -272,7 +272,7 @@ int Checkpoint::read(std::string filename, FLOAT &sim_time, int &iteration) {
 	std::size_t found = filename.find_last_of("_");
 	std::string iter_str = filename.substr(found+1);
 
-	iteration = stoi(iter_str);
+	iteration = atoi(iter_str.c_str());
 
 
 	return 1;
