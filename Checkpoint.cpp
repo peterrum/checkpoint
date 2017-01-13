@@ -41,7 +41,7 @@ std::string Checkpoint::write_ascii(FLOAT time, int iteration) {
 //			<< std::endl;
 
 	//write header information to file
-	output << "Header" << std::endl;
+	output << header << std::endl;
 	output << ascii << " " << time << " " << iteration << " "
 			<< _parameters.parallel.localSize[0] << " "
 			<< _parameters.parallel.localSize[1] << " "
