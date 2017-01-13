@@ -1,28 +1,20 @@
 #include "Checkpoint.h"
 
-Checkpoint::Checkpoint(Parameters & parameters) :
-		_parameters(parameters),
-		_chkp_counter(0),
-		header("HEADER"),
-		ascii("ASCII"),
-		binary("BIN"){
-	MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
+Checkpoint::Checkpoint(Parameters & parameters, std::string folder,
+		std::string chkp_name) :
+		_parameters(parameters), header("HEADER"), ascii("ASCII"), binary("BIN") {
 	std::stringstream ss("");
-	ss<<"mkdir -p checkpoint/data/rank_"<<_rank;
+	ss << "mkdir -p " << folder;
 	const int dir_err = system(ss.str().c_str());
 	if (-1 == dir_err) {
 		ss.str("");
-		ss<<"Cannot create "<<"checkpoint/data/rank_"<<_rank <<"folder!";
+		ss << "Cannot create " << folder << " folder!";
 		perror(ss.str().c_str());
 		exit(1);
 	}
 	_localsize = parameters.parallel.localSize;
 
-	std::stringstream tmp_chk_name("");
-	tmp_chk_name << "checkpoint/data/"<<"rank_"<<_rank<<"/"<<"chkp_" << parameters.simulation.scenario
-			<< "_" << _localsize[0] << "x" << _localsize[1] << "x"
-			<< _localsize[2];
-	_chkp_name = tmp_chk_name.str();
+	_chkp_name = folder.append(chkp_name);
 
 }
 
@@ -35,22 +27,24 @@ void Checkpoint::add(Field<FLOAT> & field, std::string name) {
 	chk_print("Added Field " + name);
 }
 
-std::string Checkpoint::write_ascii(FLOAT time) {
-	chk_print("Write out checkpoint #" + _chkp_counter);
+std::string Checkpoint::write_ascii(FLOAT time, int iteration) {
 	//Open file
-	std::ofstream output(_chkp_name.c_str(), std::ios::out | std::ios::binary);
+	std::stringstream ss("");
+	ss << _chkp_name << "_" << iteration << "_" << _parameters.parallel.rank;
+	std::ofstream output(ss.str().c_str(), std::ios::out | std::ios::binary);
 	if (!output.is_open()) {
 		std::cerr << "Cannot open file " << _chkp_name.c_str() << " !"
 				<< std::endl;
 		return "ERROR";
 	}
-	std::cout << "File " << _chkp_name.c_str() << " has been opened"
-			<< std::endl;
+//	std::cout << "File " << ss.str() << " has been opened"
+//			<< std::endl;
 
 	//write header information to file
 	output << "Header" << std::endl;
-	output << ascii << " " << time << " " << _parameters.parallel.localSize[0]
-			<< " " << _parameters.parallel.localSize[1] << " "
+	output << ascii << " " << time << " " << iteration << " "
+			<< _parameters.parallel.localSize[0] << " "
+			<< _parameters.parallel.localSize[1] << " "
 			<< _parameters.parallel.localSize[2] << std::endl;
 
 	//loop over each element in the list
@@ -115,27 +109,28 @@ std::string Checkpoint::write_ascii(FLOAT time) {
 
 	output.close();
 
-	_chkp_counter++;
-	return _chkp_name.c_str();
+	std::stringstream ss2("");
+	ss2 << _chkp_name << "_" << iteration;
+	return ss2.str().c_str();
 }
 
 std::string Checkpoint::write(FLOAT sim_time, int iteration) {
-	std::stringstream ss("");
-	ss<<_chkp_name<<"_"<<iteration;
 	//Open file
+	std::stringstream ss("");
+	ss << _chkp_name << "_" << iteration << "_" << _parameters.parallel.rank;
 	std::ofstream output(ss.str().c_str(), std::ios::out | std::ios::binary);
 	if (!output.is_open()) {
 		std::cerr << "Cannot open file " << ss.str().c_str() << " !"
 				<< std::endl;
 		return "ERROR";
 	}
-	std::cout << "File " << ss.str().c_str() << " has been opened"
-			<< std::endl;
+//	std::cout << "File " << ss.str() << " has been opened" << std::endl;
 
 	//write header information to file
 	output << header << std::endl;
-	output << binary << " " << sim_time << " " << _parameters.parallel.localSize[0]
-			<< " " << _parameters.parallel.localSize[1] << " "
+	output << binary << " " << sim_time << " " << iteration << " "
+			<< _parameters.parallel.localSize[0] << " "
+			<< _parameters.parallel.localSize[1] << " "
 			<< _parameters.parallel.localSize[2] << std::endl;
 
 	//loop over each element in the list
@@ -215,29 +210,31 @@ std::string Checkpoint::write(FLOAT sim_time, int iteration) {
 
 	output.close();
 
-	_chkp_counter++;
-	return _chkp_name.c_str();
+	std::stringstream ss2("");
+	ss2 << _chkp_name << "_" << iteration;
+	return ss2.str().c_str();
 }
 
 int Checkpoint::read(std::string filename, FLOAT &sim_time, int &iteration) {
-	if(filename == ""){
-		std::cerr<<"Filepath was empty! Aborting..."<<std::endl;
+	std::stringstream ss("");
+	ss << filename << "_" << _parameters.parallel.rank;
+
+	std::cout << "read checkpoint File: " << ss.str() << std::endl;
+	if (filename.compare("") == 0) {
+		std::cerr << "Filepath was empty! Aborting..." << std::endl;
 		return -1;
 	}
 
-    std::ifstream tmp_file(filename.c_str());
-    if(!tmp_file.good()){
-		std::cerr<<"Could not find file "<<filename<<std::endl;
-		tmp_file.close();
+	std::fstream input(ss.str().c_str(), std::ios::in | std::ios::binary);
+	if (!input.good()) {
+		std::cerr << "Could not find file " << ss.str() << std::endl;
+		input.close();
 		return -1;
-    }
-    tmp_file.close();
-
-	std::fstream input(filename.c_str(), std::ios::in | std::ios::binary);
+	}
 
 	std::string line;
 
-	getline(input, line);
+	getline(input, line, '\n');
 	if (line.compare(header) == 0) {
 		getline(input, line, ' ');
 		bool bin = true;
@@ -245,106 +242,141 @@ int Checkpoint::read(std::string filename, FLOAT &sim_time, int &iteration) {
 			bin = true;
 		} else if (line.compare(ascii) == 0) {
 			bin = false;
-		} else
+		} else {
+			std::cerr << "Wrong File format" << std::endl;
+			input.close();
 			return -1; //wrong file format
+		}
 		getline(input, line, ' ');
 		sim_time = (FLOAT) atof(line.c_str());
+		getline(input, line, ' ');
+		iteration = atoi(line.c_str());
+
+		int x, y, z;
 
 		getline(input, line, ' ');
+		x = atoi(line.c_str());
 
-		std::cout << "Binary? " << bin << " size: "
-				<< _parameters.parallel.localSize[0] << " "
-				<< _parameters.parallel.localSize[1] << " "
-				<< _parameters.parallel.localSize[2] << std::endl;
+		getline(input, line, ' ');
+		y = atoi(line.c_str());
 
-		if (bin){
-			if (readBinary(input) != 0)
-				return -1;
+		getline(input, line, ' ');
+		z = atoi(line.c_str());
+
+		std::cout << (bin?"Binary":"ASCII") << " Checkpoint sim_time: " << sim_time
+				<< " iteration: " << iteration	<< std::endl;
+
+		if(_parameters.parallel.localSize[0] != x || _parameters.parallel.localSize[1] != y ||
+				_parameters.parallel.localSize[2] != z){
+			std::cerr << " size: "
+			<< _parameters.parallel.localSize[0] << " == " << x << " "
+			<< _parameters.parallel.localSize[1] << " == " << y << " "
+			<< _parameters.parallel.localSize[2] << " == " << z << std::endl;
+			input.close();
+			return -1;
 		}
-		else if (readASCII(input) != 0)
+		if (bin) {
+			if (readBinary(input) != 0){
+				input.close();
 				return -1;
+			}
+		} else if (readASCII(input) != 0){
+			input.close();
+			return -1;
+		}
 
 	} else {
+		std::cerr << "ERROR: wrong file format" << std::endl;
+		input.close();
 		return -1;
 	}
 
-	//find iteration from filename
-	std::size_t found = filename.find_last_of("_");
-	std::string iter_str = filename.substr(found+1);
-
-	iteration = atoi(iter_str.c_str());
-
-
+	input.close();
 	return 1;
 }
 int Checkpoint::readBinary(std::fstream &input) {
 
 	//std::cout << "read BINARY" << std::endl;
-		std::string line;
-		while (getline(input, line)) {
-			//std::cout << " while: "<< line << std::endl;
-			std::list<field_data>::const_iterator it;
-			for (it = _data_list.begin(); it != _data_list.end(); ++it) {
-				if (line.compare((*it).name) == 0) {
-					//std::cout << "READ " << (*it).name << std::endl;
+	std::string line;
+	while (getline(input, line)) {
+		//std::cout << " while: "<< line << std::endl;
+		std::list<field_data>::const_iterator it;
+		for (it = _data_list.begin(); it != _data_list.end(); ++it) {
+			if (line.compare((*it).name) == 0) {
+				//std::cout << "READ " << (*it).name << std::endl;
+				try {
+					ScalarField & sf = dynamic_cast<ScalarField &>((*it).field);
+					if (_parameters.geometry.dim == 2) {
+						for (int i = 0; i < sf.getNx(); i++) {
+							for (int j = 0; j < sf.getNy(); j++) {
+								input.read(
+										reinterpret_cast<char *>(&sf.getScalar(
+												i, j)), sizeof(FLOAT));
+							}
+						}
+					} else {
+						for (int i = 0; i < sf.getNx(); i++) {
+							for (int j = 0; j < sf.getNy(); j++) {
+								for (int k = 0; k < sf.getNz(); k++) {
+									input.read(
+											reinterpret_cast<char *>(&sf.getScalar(
+													i, j, k)), sizeof(FLOAT));
+								}
+							}
+						}
+					}
+
+				} catch (const std::bad_cast& e) {
 					try {
-						ScalarField & sf = dynamic_cast<ScalarField &>((*it).field);
+						VectorField & vf =
+								dynamic_cast<VectorField &>((*it).field);
 						if (_parameters.geometry.dim == 2) {
-							for (int i = 0; i < sf.getNx(); i++) {
-								for (int j = 0; j < sf.getNy(); j++) {
-									input.read(reinterpret_cast<char *>(&sf.getScalar(
-											i, j)), sizeof(FLOAT));
+							for (int i = 0; i < vf.getNx(); i++) {
+								for (int j = 0; j < vf.getNy(); j++) {
+									input.read(
+											reinterpret_cast<char *>(&vf.getVector(
+													i, j)[0]), sizeof(FLOAT));
+									input.read(
+											reinterpret_cast<char *>(&vf.getVector(
+													i, j)[1]), sizeof(FLOAT));
+
 								}
 							}
 						} else {
-							for (int i = 0; i < sf.getNx(); i++) {
-								for (int j = 0; j < sf.getNy(); j++) {
-									for (int k = 0; k < sf.getNz(); k++) {
-										input.read(reinterpret_cast<char *>(&sf.getScalar(
-											i, j, k)), sizeof(FLOAT));
+							for (int i = 0; i < vf.getNx(); i++) {
+								for (int j = 0; j < vf.getNy(); j++) {
+									for (int k = 0; k < vf.getNz(); k++) {
+										input.read(
+												reinterpret_cast<char *>(&vf.getVector(
+														i, j, k)[0]),
+												sizeof(FLOAT));
+										input.read(
+												reinterpret_cast<char *>(&vf.getVector(
+														i, j, k)[1]),
+												sizeof(FLOAT));
+										input.read(
+												reinterpret_cast<char *>(&vf.getVector(
+														i, j, k)[2]),
+												sizeof(FLOAT));
+
 									}
 								}
 							}
 						}
 
 					} catch (const std::bad_cast& e) {
-						try {
-							VectorField & vf =
-									dynamic_cast<VectorField &>((*it).field);
-							if (_parameters.geometry.dim == 2) {
-								for (int i = 0; i < vf.getNx(); i++) {
-									for (int j = 0; j < vf.getNy(); j++) {
-										input.read(reinterpret_cast<char *>(&vf.getVector(i, j)[0]), sizeof(FLOAT));
-										input.read(reinterpret_cast<char *>(&vf.getVector(i, j)[1]), sizeof(FLOAT));
-
-									}
-								}
-							} else {
-								for (int i = 0; i < vf.getNx(); i++) {
-									for (int j = 0; j < vf.getNy(); j++) {
-										for (int k = 0; k < vf.getNz(); k++) {
-											input.read(reinterpret_cast<char *>(&vf.getVector(i, j, k)[0]), sizeof(FLOAT));
-											input.read(reinterpret_cast<char *>(&vf.getVector(i, j, k)[1]), sizeof(FLOAT));
-											input.read(reinterpret_cast<char *>(&vf.getVector(i, j, k)[2]), sizeof(FLOAT));
-
-										}
-									}
-								}
-							}
-
-						} catch (const std::bad_cast& e) {
-							std::cerr << "Field " << (*it).name
-									<< " is not a Scalar or Vector field. Reading checkpoint failed!";
-							input.close();
-							return -1;
-						}
+						std::cerr << "Field " << (*it).name
+								<< " is not a Scalar or Vector field. Reading checkpoint failed!";
+						input.close();
+						return -1;
 					}
-				}else{
-	//				happens often, but no need to do anything
 				}
+			} else {
+				//				happens often, but no need to do anything
 			}
 		}
-		return 0;
+	}
+	return 0;
 }
 
 int Checkpoint::readASCII(std::fstream &input) {
@@ -415,7 +447,7 @@ int Checkpoint::readASCII(std::fstream &input) {
 						return -1;
 					}
 				}
-			}else{
+			} else {
 //				happens often, but no need to do anything
 			}
 		}
@@ -424,7 +456,8 @@ int Checkpoint::readASCII(std::fstream &input) {
 }
 
 void Checkpoint::chk_print(std::string msg) {
-	std::cout << "Chkp[" << _rank << "] -> " << msg << std::endl;
+	std::cout << "Chkp[" << _parameters.parallel.rank << "] -> " << msg
+			<< std::endl;
 }
 
 Checkpoint::~Checkpoint() {
