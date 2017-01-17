@@ -3,14 +3,16 @@
 Checkpoint::Checkpoint(Parameters & parameters, std::string folder,
 		std::string chkp_name) :
 		_parameters(parameters), header("HEADER"), ascii("ASCII"), binary("BIN") {
-	std::stringstream ss("");
-	ss << "mkdir -p " << folder;
-	const int dir_err = system(ss.str().c_str());
-	if (-1 == dir_err) {
-		ss.str("");
-		ss << "Cannot create " << folder << " folder!";
-		perror(ss.str().c_str());
-		exit(1);
+	if(folder.compare("") != 0){
+		std::stringstream ss("");
+		ss << "mkdir -p " << folder;
+		const int dir_err = system(ss.str().c_str());
+		if (-1 == dir_err) {
+			ss.str("");
+			ss << "Cannot create " << folder << " folder!";
+			perror(ss.str().c_str());
+			exit(1);
+		}
 	}
 	_localsize = parameters.parallel.localSize;
 
